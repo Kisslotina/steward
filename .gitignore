@@ -1,0 +1,14 @@
+# Secrets — never commit
+.env
+CLAUDE.local.md
+
+# Personal context — your filled-in profile stays local
+docs/profile.md
+
+# Node
+node_modules/
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+*.swp
