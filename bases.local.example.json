@@ -1,0 +1,13 @@
+{
+  "_comment": "Per-user registry of Notion base name -> data-source ID. Copy to bases.local.json (git-ignored) or let `bootstrap-notion` write it. The sort routine reads this instead of querying Notion for the base list.",
+  "Inbox": "",
+  "Tasks": "",
+  "Projects": "",
+  "Goals": "",
+  "Content Ideas": "",
+  "Knowledge": "",
+  "Areas DB": "",
+  "Reviews": "",
+  "Not Recognized": "",
+  "Outbox": ""
+}
