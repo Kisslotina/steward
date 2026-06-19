@@ -5,7 +5,7 @@ Names must match Notion exactly (case-sensitive). Per-user data-source IDs live 
 
 ## Bases (PARA + operational)
 - **Inbox** — capture intake (Note, Status, Type, Target).
-- **Tasks**, **Projects**, **Goals**, **Content Ideas** — typed bases.
+- **Tasks**, **Projects**, **Goals**, **Ideas** — typed bases.
 - **Knowledge** — facts / references / notes (Title, Notes, Area).
 - **Areas DB** — life-domain lookup (relation target). Canon: `Career · Health · Sport · Money · Family · Content · Other`.
 - **Reviews** — wide format: one row = period, text columns per area.
@@ -13,14 +13,14 @@ Names must match Notion exactly (case-sensitive). Per-user data-source IDs live 
 - **Outbox** — outbound queue, two consumers (Item, Type, Handler, Payload, Status, Source).
 
 ## Relations
-Areas DB ← Goals / Projects / Content Ideas / Knowledge · Goals → Area · Projects → Area, Goal · Tasks → Project.
+Areas DB ← Goals / Projects / Ideas / Knowledge · Goals → Area · Projects → Area, Goal · Tasks → Project.
 
 ## Statuses
 - Inbox.Status: `New → Sorted`
 - Tasks: `Done` (checkbox), Executor `Me / Auto (Steward)`, Tag `Triage / From Daily / Reminder / Shopping`
 - Projects.Status: `Backlog · Active · On hold · Done`
 - Goals.Status: `Not started · In progress · Done`
-- Content Ideas.Status: `New · In progress · Drafted · Posted`
+- Ideas.Type: `Content · Startup · Other` (subtype set by the sorter) · Ideas.Status: `New · In progress · Drafted · Posted`
 - Not Recognized.Status: `Open → Resolved`
 - Outbox.Status: `Queued → Done` (or `Failed`) · Outbox.Type: `notify · calendar · doc · sheet · other`
 - Outbox.Handler: `Steward (MCP)` (connector actions) · `Concierge Gateway` (notifications)

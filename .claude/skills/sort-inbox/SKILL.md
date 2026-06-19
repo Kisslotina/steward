@@ -12,12 +12,12 @@ Processes every Inbox record with `Status=New`. Runs ONLY after `sweep-daily-not
    `bootstrap-notion`. This is the source of truth for which bases exist and their IDs.
 2. Read `.claude/rules/taxonomy.md` (types + routing) and `conventions.md` (names).
 3. Route only to bases present in the registry. **Never invent, rename, or abbreviate a base**
-   (no "Reflections DB", "Shopping DB", "Ideas DB"). If a type's destination base is not in the
+   (no "Reflections DB", "Shopping DB", "Content Ideas"). If a type's destination base is not in the
    registry → that item goes to **Not Recognized** (reason "no destination base: <type>").
 4. If `bases.local.json` is missing, stop and tell the user to run `bootstrap-notion` first
    (do a single discovery query only as a last resort, then offer to save the registry).
 5. Resolve every ID used downstream from this registry only — **no hardcoded IDs anywhere**:
-   `Inbox` (the source), and the targets `Tasks`, `Goals`, `Content Ideas`, `Knowledge`,
+   `Inbox` (the source), and the targets `Tasks`, `Goals`, `Ideas`, `Knowledge`,
    `Reviews`, `Not Recognized`, `Outbox`. A base whose key is absent from the registry is treated
    as "does not exist" → items for it go to **Not Recognized**.
 
@@ -70,8 +70,13 @@ If a note marks an EXISTING item done (cues: "closed", "finished", "done", names
 - no/ambiguous match → Not Recognized. Never close on a weak match.
 
 ## Step 3 — classify & FILE new items (actually write the row)
-1. Assign a `Type` from the taxonomy.
+1. Assign a `Type` from the taxonomy. Distinguish `goal` (a committed, measurable outcome with a
+   horizon) from `idea` (an unstarted seed — startup, product, or content). A startup/business/
+   product concept is an `idea`, never a `goal`.
 2. Map it to a base in the registry (Step 0). If none → Not Recognized.
+   For `idea` → **Ideas**: also set the `Ideas.Type` subtype on the new row —
+   `Content` (post/social/blog idea), `Startup` (business/venture/product concept), or `Other`.
+   `Platform` and the `Drafted/Posted` statuses apply mainly to `Type=Content`; leave blank otherwise.
 3. **Create the actual page/row** in that base's data source. Pass the destination base's
    **`data_source_id` from `bases.local.json`** as the parent, i.e.
    `parent: { type: "data_source_id", data_source_id: "<id-from-registry>" }`
