@@ -69,11 +69,7 @@ Create each as a database under the parent; put the emoji in the title (e.g. `�
   Outbox). Example: `{"Inbox":"<data-source-id>", "Tasks":"<data-source-id>", ...}`.
 - Also record the **Today page** under key `"Today"` — this value is a **page ID**, not a
   data-source ID, so `roll-day` can locate the daily page without searching.
-<<<<<<< HEAD
 - This file is the single source of IDs for `roll-day` and `sort-inbox` — they read it
-=======
-- This file is the single source of IDs for `sweep-daily-notes` and `sort-inbox` — they read it
->>>>>>> 633019246e6f8cf6125858c7b476af87ccc841b8
   instead of querying Notion. It is git-ignored (holds the user's own IDs). Without it the routine
   cannot file anything, so writing it is mandatory.
 - Report each base with its ID. Remind the user to connect their capture integration to **Inbox**
