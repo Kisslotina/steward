@@ -29,8 +29,8 @@ own each day — carry-forward therefore needs **no date mutation**.
    - **`Today`** — a **page ID** (NOT a data-source ID); the rolling daily page to sweep and refresh.
 3. If `bases.local.json` is missing, or the **`Today`** key is absent or empty, **STOP** and tell the
    user to run `bootstrap-notion` first. Never guess, search for, or hardcode the Today page or any ID.
-4. Read `.claude/rules/taxonomy.md` (types + routing) and `conventions.md` (names) — the sort phase
-   relies on them.
+4. `sort-inbox` reads `routing.md`, `taxonomy.md`, and `conventions.md` itself in Phase 3 — `roll-day`
+   does not classify, so it does not need them here.
 
 ## Tools (Notion MCP) — use these exact tools
 - `notion-fetch` — read a page or a data-source schema by ID (the `Today` page; confirm a base's
@@ -40,7 +40,8 @@ own each day — carry-forward therefore needs **no date mutation**.
   URL or a `database_id`.
 - `notion-update-page` — edit existing page content: prepend "✅ " to a swept Daily-notes line
   (Phase 2), and remove the "✅" lines at the end of the day (Phase 5).
-This routine does not call `notion-search` — every ID comes from the registry in Step 0.
+This routine does not call `notion-search` — every ID comes from the registry in Step 0, and the sort
+phase's reads belong to `sort-inbox`.
 
 ## Phases (run in order)
 The day rolls through five phases. Do them strictly in sequence; each later phase assumes the earlier
@@ -50,19 +51,21 @@ one finished. Nothing here executes outbound work — see Rules.
 The `Today` board is a **live linked view of Tasks**, so a task ticked there has **already** updated
 its Tasks row to `Done` — there is nothing to write back. This phase only **records** today's
 completed tasks for the run report / audit log.
-1. `notion-fetch` the `Today` page (or the `Tasks` data source) and read the tasks shown as done
-   today: `Done = true` with a `Do date` of today.
+1. `notion-fetch` the `Today` page once and keep its content in memory for Phases 2 and 5 (do not
+   re-fetch it each phase). Read the tasks shown as done today: `Done = true` with a `Do date` of today.
 2. List their titles and count them for the report.
 3. **Write nothing.** Do not re-close, re-check, or edit these rows — no double-close.
 
 ### 2. sweep — Daily notes → Inbox, then mark the source line "✅"
 Move the free-text Daily notes into the Inbox so the sort phase can process them. Work **one line at
-a time, in order**:
-1. `notion-fetch` the `Today` page (page ID from Step 0). Look only under the `## 📝 Daily notes`
-   heading. List each free-text line there that does **not** already start with "✅". Skip any line
-   that already starts with "✅" (it was swept on an earlier run).
+a time, in order**, and **keep a running list of the Inbox `page_id`s you create** — Phase 3 hands
+that list to `sort-inbox`:
+1. From the `Today` content read in Phase 1, look only under the `## 📝 Daily notes` heading. List
+   each free-text line there that does **not** already start with "✅". Skip any line that already
+   starts with "✅" (it was swept on an earlier run).
 2. For the next unmarked line, `notion-create-pages` **one** Inbox row:
    `parent: { data_source_id: "<Inbox id>" }`, `Note` = the line text, `Status` = `New`.
+   Record the returned `page_id` in the swept-ids list.
 3. Confirm the create returned a page ID. Then **immediately** `notion-update-page` that source line
    on `Today` to prepend "✅ " to its text.
 4. Only after the line is marked "✅", move to the next line. Repeat 2–4 until no unmarked lines remain.
@@ -72,20 +75,18 @@ marked** "✅", **STOP immediately and report** which line — do not continue. 
 re-imports it and duplicates the Inbox row.)
 
 ### 3. sort — invoke sort-inbox (process the WHOLE `New` backlog)
-Invoke **`sort-inbox`** over the Inbox. **Its scope is fixed and unambiguous: every Inbox row whose
-`Status = New`.** That is the complete work list — the lines just swept in Phase 2 **plus every
-earlier unsorted `New` capture** (e.g. notes the phone shortcut added on previous days). Process
-**all** `New` rows and nothing else (a `Sorted` row is already done — skip it).
+Invoke **`sort-inbox`**, passing the **swept `page_id`s from Phase 2 as its hint list** so it need
+not rediscover them. **Its scope is still fixed and unambiguous: every Inbox row whose `Status = New`**
+— the lines just swept **plus every earlier unsorted `New` capture** (e.g. notes the phone shortcut
+added on previous days). Process **all** `New` rows and nothing else (a `Sorted` row is already done).
 
 **Do not ask the user which items, or which subset, to sort, and never narrow to "just today's
-swept lines."** `Status = New` already defines the scope completely; there is no scope decision to
-make and no judgement call about which records are "in." If the Inbox holds 2 `New` rows or 200,
-sort all of them in this one run.
+swept lines."** `Status = New` already defines the scope completely.
 
-`sort-inbox` owns classification, routing, and completion-vs-new — **do not re-implement any of it
-here**. The default-date rule also lives there: a swept task with no date gets `Do date = today`,
-`Tag = Triage`, so it lands on today's board. See `.claude/skills/sort-inbox/SKILL.md`. Wait for it
-to finish before Phase 4.
+`sort-inbox` owns classification, routing, completion-vs-new, and archiving filed rows to **Inbox
+Archive** — **do not re-implement any of it here**. The default-date rule also lives there: a swept
+task with no date gets `Do date = today`, `Tag = Triage`, so it lands on today's board. See
+`.claude/skills/sort-inbox/SKILL.md`. Wait for it to finish before Phase 4.
 
 ### 4. carry-forward — do nothing to dates (verify only)
 Undone past tasks **resurface on their own**: the Today board filters `Done = false AND Do date <=
@@ -104,24 +105,26 @@ relative-date filter.
 - **Registry-driven.** Resolve `Inbox`, `Tasks`, and the `Today` page ID from `bases.local.json` —
   no invented names, no hardcoded IDs. Missing registry or absent `Today` key → STOP and point the
   user to `bootstrap-notion`.
-- **Calls `sort-inbox`** for classification — never re-implements sorting, routing, or completion logic.
+- **Calls `sort-inbox`** for classification — never re-implements sorting, routing, completion, or
+  archiving logic. Passes the swept `page_id`s as a hint; `New` remains the authoritative scope.
 - **Scope of the sort phase is exactly `Status = New`.** Process every `New` Inbox row — the whole
-  backlog, not only the lines swept this run. Never pause to ask which records to sort: `New` is the
-  complete selector.
+  backlog, not only the lines swept this run. Never pause to ask which records to sort.
 - **Never delete database records.** The only thing ever removed is transient "✅" free-text lines on
   the `Today` page, and only **after** they are safely in the Inbox (Phase 5 follows a verified Phase 2).
+  Filed Inbox rows are **moved** to Inbox Archive by `sort-inbox`, never deleted.
 - **Never perform outbound work.** Anything outbound is enqueued as an **Outbox** row with a
   `Handler` (`Concierge Gateway` for notifications, `Steward (MCP)` for connector actions); the
   executor routine or the Gateway runs it. `roll-day` does not act directly.
 - **One rolling page.** Sweep and refresh operate on the single `Today` page; never create per-day pages.
-- **One line at a time.** In sweep, create the Inbox row, verify it, mark "✅", then move on. A line
-  that cannot be marked halts the run (Phase 2).
+- **One line at a time.** In sweep, create the Inbox row, record its id, verify it, mark "✅", then
+  move on. A line that cannot be marked halts the run (Phase 2).
 
 ## Output (run report)
 Report, for this run:
 - **close-out** — today's completed/closed tasks recorded (count + titles).
 - **sweep → sort** — lines swept into Inbox and handed to `sort-inbox` (count); per-item outcomes
-  (filed / closed / enqueued to Outbox / Not Recognized) come from `sort-inbox`'s own report.
+  (filed / closed / enqueued to Outbox / Not Recognized / moved to Inbox Archive) come from
+  `sort-inbox`'s own report.
 - **carry-forward** — overdue tasks carried (count).
 - **errors / skips** — any line that could not be marked "✅" (and where the run stopped), a missing
   registry / `Today` key, or any failed write.

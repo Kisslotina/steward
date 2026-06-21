@@ -1,6 +1,8 @@
 # Taxonomy & routing map
 
-Single taxonomy for `Inbox.Type` and where each type goes. Destinations are **base names**; their
+Single taxonomy for `Inbox.Type` and where each type goes. The **deterministic first pass** lives in `.claude/rules/routing.md` (cue table applied before any reasoning); this file is the **semantic source of truth** that routing.md operationalises. If the two disagree, this file wins.
+
+Destinations are **base names**; their
 per-user **data-source IDs** live in the local base registry `bases.local.json` (written once by
 `bootstrap-notion`, git-ignored). The sort routine reads names here + IDs from the registry — it does
 NOT query Notion for the base list each run.
@@ -27,6 +29,7 @@ NOT query Notion for the base list each run.
 
 - Route only to bases present in `bases.local.json`. If a type's base is missing → Not Recognized
   (reason: "no destination base: <type>"). **Never invent, rename, or abbreviate a base.**
+- After a row is filed (Status=Sorted), `sort-inbox` **moves** it to **Inbox Archive** — a move, never a delete — so the live Inbox stays small and the daily read stays cheap.
 - Do not split "partially recognized": file it confidently or send the whole thing to Not Recognized.
 - `reference` ≠ action: knowledge is filed separately from tasks.
 - `goal` ≠ `idea`: a **goal** is a committed, measurable outcome with a horizon/target date

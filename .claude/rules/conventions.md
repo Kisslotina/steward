@@ -4,7 +4,8 @@ Names must match Notion exactly (case-sensitive). Per-user data-source IDs live 
 `bases.local.json` (git-ignored), written by `bootstrap-notion`.
 
 ## Bases (PARA + operational)
-- **Inbox** — capture intake (Note, Status, Type, Target).
+- **Inbox** — capture intake (Note, Status, Type, Target). Filtered view **🆕 New (unsorted)** (Status=New) is the work surface; rows drop off it when sorted.
+- **Inbox Archive** — same schema as Inbox. `sort-inbox` **moves** filed rows here so the live Inbox stays small (the daily read stays cheap). Permanent record — never deleted.
 - **Tasks**, **Projects**, **Goals**, **Ideas** — typed bases.
 - **Knowledge** — facts / references / notes (Title, Notes, Area).
 - **Areas DB** — life-domain lookup (relation target). Canon: `Career · Health · Sport · Money · Family · Content · Other`.
@@ -16,7 +17,7 @@ Names must match Notion exactly (case-sensitive). Per-user data-source IDs live 
 Areas DB ← Goals / Projects / Ideas / Knowledge · Goals → Area · Projects → Area, Goal · Tasks → Project.
 
 ## Statuses
-- Inbox.Status: `New → Sorted`
+- Inbox.Status: `New → Sorted` (then the row is moved to **Inbox Archive**, not deleted)
 - Tasks: `Done` (checkbox), Executor `Me / Auto (Steward)`, Tag `Triage / From Daily / Reminder / Shopping`
 - Projects.Status: `Backlog · Active · On hold · Done`
 - Goals.Status: `Not started · In progress · Done`
@@ -28,3 +29,10 @@ Areas DB ← Goals / Projects / Ideas / Knowledge · Goals → Area · Projects 
 ## Audit
 Every sort run writes a report: how many processed, what went where, what was closed, what landed in
 Not Recognized, and what was enqueued to Outbox.
+
+## Reading the Inbox (plan limits)
+Server-side property/SQL queries are paid: `query_data_sources` needs Enterprise, `query_database_view`
+needs Business. On free/standard plans skills read the Inbox with `notion-search` + per-page
+`notion-fetch`, which is reliable only while the Inbox is small — hence **Inbox Archive** (filed rows
+are moved out). Classification uses the deterministic table in `.claude/rules/routing.md` first, and
+falls back to model judgement only on misses.
