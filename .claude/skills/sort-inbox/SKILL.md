@@ -72,8 +72,10 @@ Goal: get EVERY `Status=New` row, regardless of capture language or blank body, 
 
 - **No server-side property filter** on free/standard plans. `query_data_sources` (SQL) needs
   Enterprise; `query_database_view` needs Business. **Do not call them — they error.**
-- `notion-search` returns only id/title/timestamp (no properties) and at most 25 results with **no
-  pagination**. So enumeration is only reliable when the Inbox holds few rows.
+- `notion-search` returns id, **title, and timestamp** (no other properties) and at most 25 results
+  with **no pagination**. So enumeration is only reliable when the Inbox holds few rows. **The Inbox
+  title field IS `Note`** — so the full capture text needed to classify is already in the search
+  result; you do **not** need a per-page `notion-fetch` to read it.
 
 The system keeps the Inbox small on purpose: filed rows are moved to **Inbox Archive** in Step 4, so
 the live Inbox holds only un-filed `New` rows (today's captures plus any the phone shortcut added).
@@ -87,26 +89,36 @@ That is what makes this read both cheap and complete.
    list. **Do not try to page past 25** — there is no cursor. If exactly 25 come back there is a
    backlog; you will reach the rest in Step 5 after this batch is archived out (do not guess at extra
    rows with more anchors). Remember whether this read returned a full 25 — Step 5 uses it.
-3. **Confirm `Status` per page (the only reliable filter).** `notion-fetch` each unique `page_id` and
-   read `Note`, `Status`, `Type`, `Target`. Split into:
-   - **to file** — `Status = New` AND `Type` is blank or not `expense` → Steps 2–3.
-   - **expense (no Finance base) → move out, do NOT re-file** — `Status = New` AND `Type = expense`.
-     Do NOT re-classify. Collect these `page_id`s for Step 4, which **moves them out of the live
-     Inbox** (with a pending-Finance marker) exactly like filed rows. Counting them is not enough —
-     they must LEAVE the live Inbox, otherwise they resurface in every `notion-search`, get
-     re-fetched every batch, eat slots in the ≤25 cap, and spin the loop. Count them in the report.
-   - **to archive** — `Status = Sorted` → leftovers from a prior run whose move failed → Step 4 only.
-4. **Sanity check.** If discovery returned rows but none are `New`, report "nothing to sort". If it
-   returned **zero** rows for an Inbox that should not be empty, report a **read failure** — never
-   silently treat the Inbox as empty.
+3. **Classify straight from the search results — do NOT `notion-fetch` each page to confirm
+   `Status`.** The title returned by Step 1.2 IS the `Note`, which is everything routing.md needs, and
+   the live-Inbox invariant (filed rows are moved out to Inbox Archive in Step 4) means every row
+   surfaced here is an unfiled `New` capture. So:
+   - **Classify each row from its `Note` title** via routing.md (Steps 2–3). No confirmation fetch —
+     this removes one `notion-fetch` per row, the single largest cost of a run.
+   - **Detect expenses by cue, not by a pre-set `Type`.** routing.md row 8 (spent/paid/$/потратил/
+     оплатил/купил за/руб/грн/…) identifies expense captures from the `Note` text itself; the old
+     reliance on a pre-set `Type=expense` is dropped (it is re-derived from the cue and so is
+     redundant). Collect these `page_id`s for Step 4, which **moves them out of the live Inbox** (with
+     a pending-Finance marker) exactly like filed rows. They must LEAVE the live Inbox, otherwise they
+     resurface in every `notion-search`, eat slots in the ≤25 cap, and spin the loop. Count them in
+     the report.
+   - **Leftover guard (rare, cheap).** A `Status=Sorted` row only lingers in the live Inbox if a prior
+     run's archive move failed — which Step 4 records as `inbox.lastArchiveFailed = true` in
+     `schema.cache.json`. **Only when that flag is set**, run a one-time per-page `notion-fetch` over
+     this batch and drop rows already `Status=Sorted` (they go to Step 4 archive, not re-filed), then
+     clear the flag. When the flag is unset (the normal case), trust the invariant and do not fetch.
+4. **Sanity check.** If Step 1.2 returned **zero** rows for an Inbox that should not be empty, report a
+   **read failure** — never silently treat the Inbox as empty.
 
 ## Step 2 — completion vs new
-If a note marks an EXISTING item done (routing.md row 1; cues: "closed", "finished", "done", names a
-known task/goal):
-- one confident match → set it Done; write to the audit log; enqueue an Outbox
-  `{Type:notify, Handler:Concierge Gateway, Status:Queued}`; then update the Inbox row:
-  set `Type=review` (or the closest matching type), `Status=Sorted`, and `Target="closed: …"`.
-- no/ambiguous match → Not Recognized. Never close on a weak match.
+A note matching routing.md row 1 (cues: "closed", "finished", "done", "completed", "сделал",
+"закрыл", "завершил", "выполнил", "готово") marks an EXISTING item done — it is NOT a new record.
+
+**Do NOT search the typed bases to auto-close it.** Matching a completion note to an existing
+Task/Project/Goal would cost an extra `notion-search` + `notion-fetch` per note and risks closing the
+wrong item on a weak match. Instead, route every completion note straight to **Not Recognized**
+(reason: "completion note — close the matching item manually") and let the user close the real item by
+hand. No search, no fetch, no auto-close.
 
 ## Step 3 — classify & FILE new items (actually write the row)
 1. **Assign a `Type` with `routing.md` first** — apply the cue table top-to-bottom, first match wins.
@@ -184,11 +196,16 @@ Inbox so the next run's read stays cheap and complete:
       invariant ("everything here is Sorted") and lets a future Finance consumer find them by
       `Type=expense` + that `Target`. If the registry later gains a dedicated holding base
       (e.g. `Expenses Pending`), move expense rows there instead — destination is registry-driven;
-   c. any `Status=Sorted` `to archive` leftovers from Step 1.3.
+   c. any already-`Status=Sorted` leftovers surfaced by the Step 1.3 leftover-guard reconciliation
+      (prior-run rows whose archive move had failed) — archive them now, never re-file.
 2. `notion-move-pages` them all in **one batched call** (up to 100 ids) with
    `new_parent: { type: "data_source_id", data_source_id: "<Inbox Archive id>" }`. Inbox Archive has
    the same schema as Inbox, so `Note`, `Status`, `Type`, `Target` are preserved. **Expense rows are
    moved out too** — they no longer stay `New` in the live Inbox.
+   - **Record the move outcome for the next run's leftover guard (Step 1.3).** On success, set
+     `inbox.lastArchiveFailed = false` in `schema.cache.json`. If the move still fails after the
+     one allowed retry, set `inbox.lastArchiveFailed = true` (so the next run runs the one-time
+     per-page reconciliation that skips already-`Sorted` rows) and report the failure.
 3. This is a move, **not a delete** — the rows live on in Inbox Archive as the permanent intake
    record. Never delete an Inbox row.
 4. If `Inbox Archive` is absent from the registry, skip the move, leave the rows `Sorted` in place,
@@ -218,8 +235,10 @@ no longer linger as `New` — there is no expense exclusion to carry anymore.)
 - **Read field names, formats, select values, and Area URLs from `schema.cache.json`** — never
   `notion-fetch` a base schema or the Areas DB to rediscover them. Self-heal the cache once if stale.
 - **Never call `query_data_sources` or `query_database_view`** — paid (Enterprise / Business). Read
-  via `notion-search` (≤25, no pagination) + per-page `notion-fetch`; drain any backlog with the
-  batch loop (Step 5), which works because filed rows are moved out to Inbox Archive (Step 4).
+  via `notion-search` (≤25, no pagination) and **classify from the returned `Note` title — no per-page
+  confirmation fetch** (Step 1.3); drain any backlog with the batch loop (Step 5), which works because
+  filed rows are moved out to Inbox Archive (Step 4). Per-page `notion-fetch` is now used only for the
+  rare leftover reconciliation (Step 1.3 guard).
 - When marking an Inbox row `Sorted`, always write its decided `Type` back — never leave it blank.
 - On any base with an Area relation, always set `Area`; fall back to **Other** when no clear match.
 - Don't split partially recognized: file whole OR Not Recognized with a reason.

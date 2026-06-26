@@ -22,7 +22,7 @@ Cues are substrings/stems, case-insensitive, matched in English and Russian (the
 
 | # | Type | Cue stems (EN / RU) | Then set |
 |---|---|---|---|
-| 1 | completion | `done`, `closed`, `finished`, `completed` / `сделал`, `закрыл`, `завершил`, `выполнил`, `готово` | not a new record — run the completion-match path (taxonomy.md) |
+| 1 | completion | `done`, `closed`, `finished`, `completed` / `сделал`, `закрыл`, `завершил`, `выполнил`, `готово` | not a new record — route to **Not Recognized** ("completion note — close manually"); no auto-match/close (taxonomy.md) |
 | 2 | event | `meeting`, `call`, `appointment`, `at 3pm`, clock time / `встреча`, `созвон`, `записан`, `в 15:00`, `завтра в` | -> **Outbox** (Type=calendar, Handler=Steward (MCP)) |
 | 3 | review | `review`, `reflection`, `weekly recap`, `looking back` / `итоги`, `ретро`, `рефлексия`, `обзор недели` | -> **Reviews** (append to matching area column) |
 | 4 | reminder | `remind`, `remember to`, `don't forget` / `напомни`, `напоминание`, `не забыть` | -> **Tasks** (Tag=Reminder + date) |

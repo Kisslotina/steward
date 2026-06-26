@@ -44,7 +44,7 @@ NOT query Notion for the base list each run.
 ## Completion / update notes (not a new record)
 
 Some notes mark an EXISTING item done (e.g. "closed task X", "finished goal Y"). These do NOT create
-a new record — `sort-inbox` matches the existing item and updates its status:
-- one confident match → set Done / Status=Done; write to the audit log; enqueue an Outbox `notify`
-  row (Handler=Concierge Gateway, so it logs to Telegram); Inbox.Target = "closed: <base>/<title>".
-- no/ambiguous match → Not Recognized ("completion note, no confident match"). Never guess.
+a new record. **`sort-inbox` does NOT auto-match or auto-close them** — searching the typed bases to
+find the item would cost an extra search + fetch per note and risks closing the wrong item on a weak
+match. Instead, every completion note routes to **Not Recognized** (reason: "completion note — close
+the matching item manually"); the user closes the real item by hand.

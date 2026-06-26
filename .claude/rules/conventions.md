@@ -37,7 +37,9 @@ Not Recognized, and what was enqueued to Outbox.
 
 ## Reading the Inbox (plan limits)
 Server-side property/SQL queries are paid: `query_data_sources` needs Enterprise, `query_database_view`
-needs Business. On free/standard plans skills read the Inbox with `notion-search` + per-page
-`notion-fetch`, which is reliable only while the Inbox is small — hence **Inbox Archive** (filed rows
-are moved out). Classification uses the deterministic table in `.claude/rules/routing.md` first, and
-falls back to model judgement only on misses.
+needs Business. On free/standard plans skills read the Inbox with `notion-search` alone — its result
+includes the title, which is the `Note`, so classification needs **no per-page `notion-fetch`**. This
+is reliable only while the Inbox is small — hence **Inbox Archive** (filed rows are moved out).
+Classification uses the deterministic table in `.claude/rules/routing.md` first, and falls back to
+model judgement only on misses. Per-page `notion-fetch` is reserved for the rare leftover
+reconciliation (Step 1.3 guard of `sort-inbox`).
